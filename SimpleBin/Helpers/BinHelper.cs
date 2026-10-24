@@ -65,8 +65,8 @@ namespace SimpleBin
                     IncludeSubdirectories = false,
                     EnableRaisingEvents = true,
                     InternalBufferSize = 65536,
-                    Filter = "$I*",
-                    NotifyFilter = NotifyFilters.FileName
+                    Filters = { "$I*", "$R*" },
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
                 };
 
                 watcher.Created += OnBinChanged;
