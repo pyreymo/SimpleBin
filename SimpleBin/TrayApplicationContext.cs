@@ -15,15 +15,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
     public TrayApplicationContext()
     {
         _dispatcher.CreateControl();
-        _menu.Items.Add("清空...", null, (_, _) => BinHelper.ClearBin());
-        _menu.Items.Add("退出", null, (_, _) => ExitThread());
         _tray = new NotifyIcon { Text = "SimpleBin" };
         _tray.MouseUp += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
                 Process.Start("explorer.exe", "shell:RecycleBinFolder");
             else if (e.Button == MouseButtons.Right)
-                _menu.Show(Cursor.Position);
+            {
+                switch (_menu.Show(Cursor.Position))
+                {
+                    case 1:
+                        BinHelper.ClearBin(_menu.Handle);
+                        break;
+                    case 2:
+                        ExitThread();
+                        break;
+                }
+            }
         };
         _bin.Update += OnBinChanged;
         SystemEvents.UserPreferenceChanged += OnPreferenceChanged;

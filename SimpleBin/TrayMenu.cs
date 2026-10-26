@@ -1,132 +1,241 @@
 using Microsoft.Win32;
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace SimpleBin;
 
-internal sealed class TrayMenu : ToolStripDropDown
+internal sealed class TrayMenu : NativeWindow, IDisposable
 {
-    private Point _openingPosition;
-    private bool _mouseMoved;
-    private bool _mousePressed;
+    private float _scale;
+    private Font? _font;
+    private Color _background;
+    private Color _foreground;
+    private bool _showing;
 
-    internal TrayMenu()
+    internal TrayMenu() => CreateHandle(new CreateParams
     {
-        AutoSize = true;
-        LayoutStyle = ToolStripLayoutStyle.Flow;
-        var layout = (FlowLayoutSettings)LayoutSettings!;
-        layout.FlowDirection = FlowDirection.TopDown;
-        layout.WrapContents = false;
-        ShowItemToolTips = false;
-        Padding = new Padding(5);
-        Renderer = new MenuRenderer();
+        Caption = "SimpleBin.MenuOwner",
+        Style = unchecked((int)0x80000000) // A top-level owner lets Windows dismiss the tray menu normally.
+    });
+
+    internal uint Show(Point position)
+    {
+        if (_showing) return 0;
+        _showing = true;
+        nint menu = 0;
+        nint backgroundBrush = 0;
+        try
+        {
+            Native.SetWindowPos(Handle, 0, position.X, position.Y, 0, 0, 0x0015);
+            _scale = Native.GetDpiForWindow(Handle) / 96f;
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            bool dark = key?.GetValue("AppsUseLightTheme") is int value && value == 0;
+            _background = dark ? Color.FromArgb(32, 32, 32) : Color.FromArgb(250, 250, 250);
+            _foreground = dark ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
+            var systemFont = SystemFonts.MenuFont ?? SystemFonts.DefaultFont;
+            _font = new Font(systemFont.FontFamily, systemFont.SizeInPoints * 96 * _scale / 72, GraphicsUnit.Pixel);
+
+            menu = Native.CreatePopupMenu();
+            if (menu == 0) throw new Win32Exception();
+            AddItem(menu, 1, "清空...");
+            AddItem(menu, 2, "退出");
+            backgroundBrush = Native.CreateSolidBrush((uint)ColorTranslator.ToWin32(_background));
+            var menuInfo = new MenuInfo
+            {
+                Size = (uint)Marshal.SizeOf<MenuInfo>(),
+                Mask = 2, // MIM_BACKGROUND
+                Background = backgroundBrush
+            };
+            if (!Native.SetMenuInfo(menu, ref menuInfo)) throw new Win32Exception();
+
+            Native.SetForegroundWindow(Handle);
+            var placement = new PopupParameters
+            {
+                Size = (uint)Marshal.SizeOf<PopupParameters>(),
+                Exclude = new Rect(position.X - 1, position.Y - 1, position.X + 1, position.Y + 1)
+            };
+            // Windows owns the input loop: hover never executes a command; click, Enter or Esc ends it.
+            return Native.TrackPopupMenuEx(menu, 0x0100 | 0x0040, position.X, position.Y, Handle, ref placement);
+        }
+        finally
+        {
+            if (menu != 0) Native.DestroyMenu(menu);
+            if (backgroundBrush != 0) Native.DeleteObject(backgroundBrush);
+            _font?.Dispose();
+            _font = null;
+            _showing = false;
+            // Required by the Windows notification-area menu contract for subsequent invocations.
+            Native.PostMessageW(Handle, 0, 0, 0);
+        }
     }
 
-    protected override void OnOpening(System.ComponentModel.CancelEventArgs e)
+    private static void AddItem(nint menu, uint id, string text)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-        bool dark = key?.GetValue("AppsUseLightTheme") is int value && value == 0;
-        BackColor = dark ? Color.FromArgb(32, 32, 32) : Color.FromArgb(250, 250, 250);
-        ForeColor = dark ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
-        float scale = DeviceDpi / 96f;
-        int width = Math.Max((int)(160 * scale), Items.Cast<ToolStripItem>()
-            .Max(item => TextRenderer.MeasureText(item.Text, Font).Width) + (int)(64 * scale));
-        int height = (int)(36 * scale);
-        Padding = new Padding((int)(5 * scale));
-        foreach (ToolStripItem item in Items)
+        if (!Native.AppendMenuW(menu, 0, id, text)) throw new Win32Exception();
+        var info = new MenuItemInfo
         {
-            item.Margin = Padding.Empty;
-            item.AutoSize = false;
-            item.Size = new Size(width, height);
-        }
-        _openingPosition = Cursor.Position;
-        _mouseMoved = false;
-        _mousePressed = false;
-        base.OnOpening(e);
+            Size = (uint)Marshal.SizeOf<MenuItemInfo>(),
+            Mask = 0x0100, // MIIM_FTYPE; preserve the text for accessibility.
+            Type = 0x0100 // MFT_OWNERDRAW
+        };
+        if (!Native.SetMenuItemInfoW(menu, id, false, ref info)) throw new Win32Exception();
     }
 
     protected override void WndProc(ref Message m)
     {
-        const int MouseMove = 0x0200;
-        const int LeftButtonDown = 0x0201;
-        const int LeftButtonUp = 0x0202;
-        const int RightButtonUp = 0x0205;
-
-        if (m.Msg == MouseMove)
+        const int MeasureItem = 0x002C;
+        const int DrawItem = 0x002B;
+        const int ActivateApp = 0x001C;
+        if (m.Msg == MeasureItem && _font is not null)
         {
-            // Ignore the stationary cursor inherited from the tray right-click.
-            _mouseMoved |= Cursor.Position != _openingPosition;
-            if (!_mouseMoved)
-                return;
-        }
-        if (m.Msg == LeftButtonDown)
-            _mousePressed = true;
-        if (m.Msg == LeftButtonUp)
-        {
-            bool pressed = _mousePressed;
-            _mousePressed = false;
-            if (!pressed)
-                return;
-        }
-        if (m.Msg == RightButtonUp)
+            var item = Marshal.PtrToStructure<MeasureItemInfo>(m.LParam);
+            item.Width = (uint)Math.Max(160 * _scale,
+                TextRenderer.MeasureText("清空...", _font).Width + 64 * _scale);
+            item.Height = (uint)Math.Round(36 * _scale);
+            Marshal.StructureToPtr(item, m.LParam, false);
+            m.Result = 1;
             return;
+        }
+        if (m.Msg == DrawItem && _font is not null)
+        {
+            Draw(Marshal.PtrToStructure<DrawItemInfo>(m.LParam));
+            m.Result = 1;
+            return;
+        }
+        if (m.Msg == ActivateApp && m.WParam == 0 && _showing)
+            Native.EndMenu();
         base.WndProc(ref m);
     }
 
-    private sealed class MenuRenderer : ToolStripRenderer
+    private void Draw(DrawItemInfo item)
     {
-        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) =>
-            e.Graphics.Clear(e.ToolStrip.BackColor);
-
-        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+        using var graphics = Graphics.FromHdc(item.DeviceContext);
+        var bounds = Rectangle.FromLTRB(item.Bounds.Left, item.Bounds.Top, item.Bounds.Right, item.Bounds.Bottom);
+        using var background = new SolidBrush(_background);
+        graphics.FillRectangle(background, bounds);
+        if ((item.State & 1) != 0) // ODS_SELECTED
         {
-            using var pen = new Pen(Color.FromArgb(55, e.ToolStrip.ForeColor));
-            e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+            var highlight = bounds;
+            highlight.Inflate(-(int)Math.Round(5 * _scale), -(int)Math.Round(2 * _scale));
+            using var hover = new SolidBrush(Color.FromArgb(25, _foreground));
+            graphics.FillRectangle(hover, highlight);
         }
-
-        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+        var state = graphics.Save();
+        graphics.TranslateTransform(bounds.Left + 12 * _scale, bounds.Top + (bounds.Height - 16 * _scale) / 2);
+        graphics.ScaleTransform(_scale, _scale);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var pen = new Pen(_foreground, 1.25f))
         {
-            if (e.ToolStrip is null || !e.Item.Selected) return;
-            using var brush = new SolidBrush(Color.FromArgb(25, e.ToolStrip.ForeColor));
-            // Drop-down layout places rows at the edge; inset the highlight within each row.
-            float scale = e.ToolStrip.DeviceDpi / 96f;
-            int horizontalInset = 0;
-            int verticalInset = (int)(2 * scale);
-            var bounds = new Rectangle(horizontalInset, verticalInset,
-                e.Item.Width - horizontalInset * 2, e.Item.Height - verticalInset * 2);
-            e.Graphics.FillRectangle(brush, bounds);
-        }
-
-        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
-        {
-            if (e.ToolStrip is null) return;
-            float scale = e.ToolStrip.DeviceDpi / 96f;
-            var state = e.Graphics.Save();
-            e.Graphics.TranslateTransform(12 * scale, (e.Item.Height - 16 * scale) / 2);
-            e.Graphics.ScaleTransform(scale, scale);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var pen = new Pen(e.ToolStrip.ForeColor, 1.25f))
+            if (item.Id == 1)
             {
-                if (e.Item == e.ToolStrip.Items[0])
-                {
-                    e.Graphics.DrawLine(pen, 2, 4, 14, 4);
-                    e.Graphics.DrawLines(pen, [new(5, 4), new(5, 2), new(11, 2), new(11, 4)]);
-                    e.Graphics.DrawLines(pen, [new(3, 5), new(4, 14), new(12, 14), new(13, 5)]);
-                    e.Graphics.DrawLine(pen, 6, 7, 6, 11);
-                    e.Graphics.DrawLine(pen, 10, 7, 10, 11);
-                }
-                else
-                {
-                    e.Graphics.DrawLines(pen, [new(7, 2), new(2, 2), new(2, 14), new(7, 14)]);
-                    e.Graphics.DrawLine(pen, 6, 8, 14, 8);
-                    e.Graphics.DrawLines(pen, [new(11, 5), new(14, 8), new(11, 11)]);
-                }
+                graphics.DrawLine(pen, 2, 4, 14, 4);
+                graphics.DrawLines(pen, [new(5, 4), new(5, 2), new(11, 2), new(11, 4)]);
+                graphics.DrawLines(pen, [new(3, 5), new(4, 14), new(12, 14), new(13, 5)]);
+                graphics.DrawLine(pen, 6, 7, 6, 11);
+                graphics.DrawLine(pen, 10, 7, 10, 11);
             }
-            e.Graphics.Restore(state);
-            e.TextColor = e.ToolStrip.ForeColor;
-            e.TextRectangle = new Rectangle((int)(40 * scale), 0,
-                e.Item.Width - (int)(64 * scale), e.Item.Height);
-            e.TextFormat = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
-            base.OnRenderItemText(e);
+            else
+            {
+                graphics.DrawLines(pen, [new(7, 2), new(2, 2), new(2, 14), new(7, 14)]);
+                graphics.DrawLine(pen, 6, 8, 14, 8);
+                graphics.DrawLines(pen, [new(11, 5), new(14, 8), new(11, 11)]);
+            }
         }
+        graphics.Restore(state);
+        var textBounds = Rectangle.FromLTRB(bounds.Left + (int)(40 * _scale), bounds.Top,
+            bounds.Right - (int)(24 * _scale), bounds.Bottom);
+        TextRenderer.DrawText(graphics, item.Id == 1 ? "清空..." : "退出", _font, textBounds, _foreground,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+    }
+
+    public void Dispose() => DestroyHandle();
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect(int left, int top, int right, int bottom)
+    {
+        public int Left = left, Top = top, Right = right, Bottom = bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PopupParameters
+    {
+        public uint Size;
+        public Rect Exclude;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MeasureItemInfo
+    {
+        public uint ControlType, ControlId, Id, Width, Height;
+        public nuint Data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DrawItemInfo
+    {
+        public uint ControlType, ControlId, Id, Action, State;
+        public nint ItemWindow, DeviceContext;
+        public Rect Bounds;
+        public nuint Data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MenuInfo
+    {
+        public uint Size, Mask, Style, MaxHeight;
+        public nint Background;
+        public uint HelpId;
+        public nuint Data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MenuItemInfo
+    {
+        public uint Size, Mask, Type, State, Id;
+        public nint SubMenu, CheckedBitmap, UncheckedBitmap;
+        public nuint Data;
+        public nint Text;
+        public uint TextLength;
+        public nint Bitmap;
+    }
+
+    private static class Native
+    {
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern nint CreatePopupMenu();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool AppendMenuW(nint menu, uint flags, nuint id, string text);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetMenuItemInfoW(nint menu, uint id, [MarshalAs(UnmanagedType.Bool)] bool byPosition, ref MenuItemInfo info);
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetMenuInfo(nint menu, ref MenuInfo info);
+        [DllImport("user32.dll")]
+        internal static extern uint TrackPopupMenuEx(nint menu, uint flags, int x, int y, nint owner, ref PopupParameters parameters);
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DestroyMenu(nint menu);
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetForegroundWindow(nint window);
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool PostMessageW(nint window, uint message, nuint wParam, nint lParam);
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool EndMenu();
+        [DllImport("user32.dll")]
+        internal static extern uint GetDpiForWindow(nint window);
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
+        [DllImport("gdi32.dll")]
+        internal static extern nint CreateSolidBrush(uint color);
+        [DllImport("gdi32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DeleteObject(nint handle);
     }
 }

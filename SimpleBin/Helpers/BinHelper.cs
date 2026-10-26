@@ -54,9 +54,8 @@ namespace SimpleBin
             }
         }
 
-        internal static void ClearBin()
+        internal static void ClearBin(nint parentWindow)
         {
-            var parentWindow = IntPtr.Zero;
             const string? pszRootPath = null; //need to clear data from all disks
 
             const uint flags = 0; // Let Windows confirm before permanently deleting anything.
