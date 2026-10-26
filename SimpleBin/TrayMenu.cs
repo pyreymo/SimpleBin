@@ -3,7 +3,7 @@ using System.Drawing.Drawing2D;
 
 namespace SimpleBin;
 
-internal sealed class TrayMenu : ContextMenuStrip
+internal sealed class TrayMenu : ToolStripDropDown
 {
     private Point _openingPosition;
     private bool _mouseMoved;
@@ -11,11 +11,13 @@ internal sealed class TrayMenu : ContextMenuStrip
 
     internal TrayMenu()
     {
-        AutoSize = false;
-        ShowImageMargin = false;
-        ShowCheckMargin = false;
+        AutoSize = true;
+        LayoutStyle = ToolStripLayoutStyle.Flow;
+        var layout = (FlowLayoutSettings)LayoutSettings!;
+        layout.FlowDirection = FlowDirection.TopDown;
+        layout.WrapContents = false;
         ShowItemToolTips = false;
-        Padding = Padding.Empty;
+        Padding = new Padding(5);
         Renderer = new MenuRenderer();
     }
 
@@ -29,13 +31,13 @@ internal sealed class TrayMenu : ContextMenuStrip
         int width = Math.Max((int)(160 * scale), Items.Cast<ToolStripItem>()
             .Max(item => TextRenderer.MeasureText(item.Text, Font).Width) + (int)(64 * scale));
         int height = (int)(36 * scale);
-        Padding = Padding.Empty;
+        Padding = new Padding((int)(5 * scale));
         foreach (ToolStripItem item in Items)
         {
+            item.Margin = Padding.Empty;
             item.AutoSize = false;
             item.Size = new Size(width, height);
         }
-        Size = new Size(width, height * Items.Count);
         _openingPosition = Cursor.Position;
         _mouseMoved = false;
         _mousePressed = false;
@@ -87,8 +89,8 @@ internal sealed class TrayMenu : ContextMenuStrip
             using var brush = new SolidBrush(Color.FromArgb(25, e.ToolStrip.ForeColor));
             // Drop-down layout places rows at the edge; inset the highlight within each row.
             float scale = e.ToolStrip.DeviceDpi / 96f;
-            int horizontalInset = (int)(6 * scale);
-            int verticalInset = (int)(3 * scale);
+            int horizontalInset = 0;
+            int verticalInset = (int)(2 * scale);
             var bounds = new Rectangle(horizontalInset, verticalInset,
                 e.Item.Width - horizontalInset * 2, e.Item.Height - verticalInset * 2);
             e.Graphics.FillRectangle(brush, bounds);
