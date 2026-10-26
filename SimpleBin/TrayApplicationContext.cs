@@ -17,12 +17,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _dispatcher.CreateControl();
         _menu.Items.Add("清空...", null, (_, _) => BinHelper.ClearBin());
         _menu.Items.Add("退出", null, (_, _) => ExitThread());
-        _menu.ShowItemToolTips = false;
-        foreach (ToolStripItem item in _menu.Items)
-        {
-            item.AutoSize = false;
-            item.Size = new Size(156, 36);
-        }
         _tray = new NotifyIcon { Text = "SimpleBin", ContextMenuStrip = _menu };
         _tray.MouseClick += (_, e) =>
         {

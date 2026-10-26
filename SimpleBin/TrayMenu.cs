@@ -11,6 +11,7 @@ internal sealed class TrayMenu : ContextMenuStrip
 
     internal TrayMenu()
     {
+        AutoSize = false;
         ShowImageMargin = false;
         ShowCheckMargin = false;
         ShowItemToolTips = false;
@@ -24,6 +25,18 @@ internal sealed class TrayMenu : ContextMenuStrip
         bool dark = key?.GetValue("AppsUseLightTheme") is int value && value == 0;
         BackColor = dark ? Color.FromArgb(32, 32, 32) : Color.FromArgb(250, 250, 250);
         ForeColor = dark ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
+        float scale = DeviceDpi / 96f;
+        int inset = (int)(5 * scale);
+        int width = Math.Max((int)(160 * scale), Items.Cast<ToolStripItem>()
+            .Max(item => TextRenderer.MeasureText(item.Text, Font).Width) + (int)(64 * scale));
+        int height = (int)(36 * scale);
+        Padding = new Padding(inset);
+        foreach (ToolStripItem item in Items)
+        {
+            item.AutoSize = false;
+            item.Size = new Size(width, height);
+        }
+        Size = new Size(width + inset * 2, height * Items.Count + inset * 2);
         _openingPosition = Cursor.Position;
         _mouseMoved = false;
         _mousePressed = false;
@@ -104,7 +117,7 @@ internal sealed class TrayMenu : ContextMenuStrip
             e.Graphics.Restore(state);
             e.TextColor = e.ToolStrip.ForeColor;
             e.TextRectangle = new Rectangle((int)(40 * scale), 0,
-                e.Item.Width - (int)(48 * scale), e.Item.Height);
+                e.Item.Width - (int)(64 * scale), e.Item.Height);
             e.TextFormat = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
             base.OnRenderItemText(e);
         }
