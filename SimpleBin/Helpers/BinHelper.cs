@@ -6,20 +6,11 @@ namespace SimpleBin
 {
     static partial class NativeBinMethods
     {
-        [Flags]
-        internal enum RecycleBinFlags : uint
-        {
-            None = 0,
-            SherbNoconfirmation = 0x00000001,
-            SherbNoprogressui = 0x00000002,
-            SherbNosound = 0x00000004
-        }
-
         [LibraryImport("shell32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
         internal static partial int SHEmptyRecycleBinW(
              IntPtr hwnd,
              string? pszRootPath,
-             RecycleBinFlags dwFlags);
+             uint dwFlags);
     }
 
     public sealed class BinHelper : IDisposable
@@ -64,16 +55,16 @@ namespace SimpleBin
 
         internal static bool ClearBin()
         {
-            const int okCode = 0;
             var parentWindow = IntPtr.Zero;
             const string? pszRootPath = null; //need to clear data from all disks
 
-            const NativeBinMethods.RecycleBinFlags flags = NativeBinMethods.RecycleBinFlags.SherbNoconfirmation |
-                                    NativeBinMethods.RecycleBinFlags.SherbNosound;
+            const uint flags = 0; // Let Windows confirm before permanently deleting anything.
 
             int resultCode = NativeBinMethods.SHEmptyRecycleBinW(parentWindow, pszRootPath, flags);
 
-            if (resultCode != okCode) throw new Exception("SHEmptyRecycleBinW failed");
+            if (resultCode < 0 && resultCode != unchecked((int)0x800704C7))
+                MessageBox.Show(Marshal.GetExceptionForHR(resultCode)?.Message ?? "无法清空回收站。",
+                    "SimpleBin", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
             return true;
         }
@@ -135,3 +126,5 @@ namespace SimpleBin
         }
     }
 }
+
+

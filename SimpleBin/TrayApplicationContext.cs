@@ -8,15 +8,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly BinHelper _bin = new();
     private readonly IconHelper _icons = new(IsDarkTheme());
-    private readonly ContextMenuStrip _menu = new();
+    private readonly TrayMenu _menu = new();
     private readonly NotifyIcon _tray;
     private readonly Control _dispatcher = new();
 
     public TrayApplicationContext()
     {
         _dispatcher.CreateControl();
-        _menu.Items.Add("清空...", null, (_, _) => BinHelper.ClearBin());
-        _menu.Items.Add("退出", null, (_, _) => ExitThread());
+        _menu.Items.Add("清空...", CreateMenuIcon("\uE74D"), (_, _) => BinHelper.ClearBin());
+        _menu.Items.Add("退出", CreateMenuIcon("\uE8BB"), (_, _) => ExitThread());
+        _menu.ShowItemToolTips = false;
+        foreach (ToolStripItem item in _menu.Items)
+        {
+            item.AutoSize = false;
+            item.Size = new Size(144, 36);
+        }
         _tray = new NotifyIcon { Text = "SimpleBin", ContextMenuStrip = _menu };
         _tray.MouseClick += (_, e) =>
         {
@@ -27,6 +33,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         SystemEvents.UserPreferenceChanged += OnPreferenceChanged;
         RefreshIcon();
         _tray.Visible = true;
+    }
+
+    private static Bitmap CreateMenuIcon(string glyph)
+    {
+        var image = new Bitmap(16, 16);
+        using var graphics = Graphics.FromImage(image);
+        using var font = new Font("Segoe MDL2 Assets", 12, GraphicsUnit.Pixel);
+        TextRenderer.DrawText(graphics, glyph, font, new Rectangle(0, 0, 16, 16),
+            SystemColors.MenuText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        return image;
     }
 
     private static bool IsDarkTheme()
@@ -58,10 +74,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _bin.Update -= OnBinChanged;
             _bin.Dispose();
             _tray.Dispose();
+            foreach (ToolStripItem item in _menu.Items)
+                item.Image?.Dispose();
             _menu.Dispose();
             _dispatcher.Dispose();
         }
         base.Dispose(disposing);
     }
 }
+
 
