@@ -12,11 +12,11 @@
 
 要求：Windows 10.0.19041.0 或更新版本、.NET 10 Desktop Runtime。
 
-构建：`dotnet build -c Release`。
+构建：`dotnet build -c Release`。输出固定在项目内的 `SimpleBin/bin/Release`；发布输出固定在项目内的 `artifacts/publish`。
 
 安装包使用 Velopack，显式包含桌面与开始菜单快捷方式：
 
 ```powershell
-dotnet publish SimpleBin/SimpleBin.csproj -c Release -o artifacts/install-publish --self-contained false
-vpk pack -u SimpleBin -v 1.1.3 -p artifacts/install-publish -o artifacts/installer -e SimpleBin.exe -i SimpleBin/App.ico --shortcuts Desktop,StartMenuRoot --delta None
+dotnet publish SimpleBin/SimpleBin.csproj -c Release --self-contained false
+vpk pack -u SimpleBin -v 1.1.5 -p artifacts/publish -o artifacts/installer -e SimpleBin.exe -i SimpleBin/App.ico --shortcuts Desktop,StartMenuRoot --delta None
 ```

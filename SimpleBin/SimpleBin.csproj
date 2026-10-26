@@ -2,6 +2,8 @@
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
+        <BaseOutputPath>$(MSBuildProjectDirectory)\bin\</BaseOutputPath>
+        <PublishDir>$(MSBuildProjectDirectory)\..\artifacts\publish\</PublishDir>
 		<Nullable>enable</Nullable>
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
