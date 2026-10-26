@@ -15,7 +15,7 @@ internal sealed class TrayMenu : ContextMenuStrip
         ShowImageMargin = false;
         ShowCheckMargin = false;
         ShowItemToolTips = false;
-        Padding = new Padding(5);
+        Padding = Padding.Empty;
         Renderer = new MenuRenderer();
     }
 
@@ -26,17 +26,16 @@ internal sealed class TrayMenu : ContextMenuStrip
         BackColor = dark ? Color.FromArgb(32, 32, 32) : Color.FromArgb(250, 250, 250);
         ForeColor = dark ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
         float scale = DeviceDpi / 96f;
-        int inset = (int)(5 * scale);
         int width = Math.Max((int)(160 * scale), Items.Cast<ToolStripItem>()
             .Max(item => TextRenderer.MeasureText(item.Text, Font).Width) + (int)(64 * scale));
         int height = (int)(36 * scale);
-        Padding = new Padding(inset);
+        Padding = Padding.Empty;
         foreach (ToolStripItem item in Items)
         {
             item.AutoSize = false;
             item.Size = new Size(width, height);
         }
-        Size = new Size(width + inset * 2, height * Items.Count + inset * 2);
+        Size = new Size(width, height * Items.Count);
         _openingPosition = Cursor.Position;
         _mouseMoved = false;
         _mousePressed = false;
@@ -86,7 +85,13 @@ internal sealed class TrayMenu : ContextMenuStrip
         {
             if (e.ToolStrip is null || !e.Item.Selected) return;
             using var brush = new SolidBrush(Color.FromArgb(25, e.ToolStrip.ForeColor));
-            e.Graphics.FillRectangle(brush, new Rectangle(Point.Empty, e.Item.Size));
+            // Drop-down layout places rows at the edge; inset the highlight within each row.
+            float scale = e.ToolStrip.DeviceDpi / 96f;
+            int horizontalInset = (int)(6 * scale);
+            int verticalInset = (int)(3 * scale);
+            var bounds = new Rectangle(horizontalInset, verticalInset,
+                e.Item.Width - horizontalInset * 2, e.Item.Height - verticalInset * 2);
+            e.Graphics.FillRectangle(brush, bounds);
         }
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
