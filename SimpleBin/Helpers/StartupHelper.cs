@@ -1,61 +1,20 @@
-﻿using Microsoft.Win32;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
-using System.Resources;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+using Microsoft.Win32;
 
-namespace SimpleBin.Helpers
+namespace SimpleBin.Helpers;
+
+internal static class StartupHelper
 {
-    public static class StartupHelper
+    private const string RegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
+    internal static void AddToStartup()
     {
-        private const string _appName = "SimpleBin";
-        private const string _registryPath = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+        using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
+        key.SetValue("SimpleBin", $"\"{Application.ExecutablePath}\"");
+    }
 
-        static StartupHelper()
-        {
-            // Use to change Registry key when .exe location is changed
-            if (IsInStartup())
-            {
-                RemoveFromStartup();
-                AddToStartup();
-            }
-        }
-
-        public static void AddToStartup()
-        {
-            string appPath = Application.ExecutablePath;
-
-            using RegistryKey? rk = Registry.CurrentUser.OpenSubKey(
-                _registryPath, true);
-
-            rk?.SetValue(_appName, appPath);
-
-            rk?.Close();
-        }
-
-        public static bool IsInStartup()
-        {
-            using RegistryKey? rk = Registry.CurrentUser.OpenSubKey(
-               _registryPath, false);
-
-            string? value = rk?.GetValue(_appName) as string;
-            rk?.Close();
-
-            return !string.IsNullOrEmpty(value);
-        }
-
-        public static void RemoveFromStartup()
-        {
-            using RegistryKey? rk = Registry.CurrentUser.OpenSubKey(
-              _registryPath, true);
-
-            rk?.DeleteValue(_appName, false);
-            rk?.Close();
-        }
+    internal static void RemoveFromStartup()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RegistryPath, true);
+        key?.DeleteValue("SimpleBin", false);
     }
 }
