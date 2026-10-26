@@ -14,6 +14,9 @@ internal static class Program
             .OnBeforeUninstallFastCallback(_ => StartupHelper.RemoveFromStartup())
             .Run();
 
+        using var instance = new Mutex(true, @"Local\SimpleBin", out bool firstInstance);
+        if (!firstInstance) return;
+
         try
         {
             ApplicationConfiguration.Initialize();
