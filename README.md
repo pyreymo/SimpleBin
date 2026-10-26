@@ -1,45 +1,16 @@
 # SimpleBin
 
-轻量的 Windows 回收站托盘程序。
+一个轻量的 Windows 回收站托盘工具。
 
-- 单击左键打开系统回收站。
-- 单击右键显示带图标的“清空...”和“退出”，每项约 36px 高。
-- 清空前由 Windows 显示确认框；退出直接关闭程序。
-- 托盘图标区分回收站空/非空，并跟随系统深浅色主题。
-- 安装后自动启用开机启动，卸载时移除启动项。
+- 左键单击托盘图标，打开回收站。
+- 右键选择“清空...”清空回收站，删除前由系统确认；选择“退出”关闭程序。
+- 图标区分回收站空/非空状态，并跟随系统深浅色主题。
+- 安装后自动启用开机启动。
 
-没有设置窗口、数量或大小预览，也不保存用户配置。重复启动会直接退出，不会创建第二个托盘图标。
+运行要求：Windows 10（19041）或更新版本，以及 .NET 10 Desktop Runtime。
 
-要求：Windows 10.0.19041.0 或更新版本、.NET 10 Desktop Runtime。
-
-构建：`dotnet build -c Release`。输出固定在项目内的 `SimpleBin/bin/Release`；发布输出固定在项目内的 `artifacts/publish`。
-
-安装包使用 Velopack，显式包含桌面与开始菜单快捷方式：
+从源码构建：
 
 ```powershell
-$projectRoot = (Get-Location).Path
-$env:TEMP = Join-Path $projectRoot 'artifacts/pack-work'
-$env:TMP = $env:TEMP
-New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
-dotnet publish SimpleBin/SimpleBin.csproj -c Release --self-contained false
-vpk pack -u SimpleBin -v 1.1.6 -p artifacts/publish -o artifacts/installer -e SimpleBin.exe -i SimpleBin/App.ico --shortcuts Desktop,StartMenuRoot --delta None
-```
-
-本机安装位置明确指定为项目内的 `artifacts/installed`，避免从打包应用启动安装器时落入其 AppData 虚拟目录：
-
-```powershell
-./artifacts/installer/SimpleBin-win-Setup.exe --silent --installto "$PWD/artifacts/installed"
-```
-
-安装与更新时创建桌面和开始菜单快捷方式，目标为安装目录的 `SimpleBin.exe`，图标明确使用同目录的 `App.ico`。
-
-从 Codex 内安装时，通过桌面 Shell 启动，防止继承 Codex 的 MSIX 虚拟化上下文：
-
-```powershell
-$projectRoot = (Get-Location).Path
-$desktopShell = New-Object -ComObject Shell.Application
-$desktopShell.ShellExecute(
-    (Join-Path $projectRoot 'artifacts/installer/SimpleBin-win-Setup.exe'),
-    ('--silent --installto "' + (Join-Path $projectRoot 'artifacts/installed') + '"'),
-    $projectRoot, 'open', 0)
+dotnet build -c Release
 ```
