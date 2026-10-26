@@ -1,16 +1,9 @@
 # SimpleBin
 
-一个轻量的 Windows 回收站托盘工具。
+Windows 回收站托盘工具，支持状态图标、系统主题和开机自启。
 
-- 左键单击托盘图标，打开回收站。
-- 右键选择“清空...”清空回收站，删除前由系统确认；选择“退出”关闭程序。
-- 图标区分回收站空/非空状态，并跟随系统深浅色主题。
-- 安装后自动启用开机启动。
+左键打开回收站；右键清空或退出，清空前由系统确认。
 
-运行要求：Windows 10（19041）或更新版本，以及 .NET 10 Desktop Runtime。
+要求 Windows 10（19041）及以上和 .NET 10 Desktop Runtime。
 
-从源码构建：
-
-```powershell
-dotnet build -c Release
-```
+构建：`dotnet build -c Release`
