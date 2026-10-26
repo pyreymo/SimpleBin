@@ -17,6 +17,10 @@
 安装包使用 Velopack，显式包含桌面与开始菜单快捷方式：
 
 ```powershell
+$projectRoot = (Get-Location).Path
+$env:TEMP = Join-Path $projectRoot 'artifacts/pack-work'
+$env:TMP = $env:TEMP
+New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
 dotnet publish SimpleBin/SimpleBin.csproj -c Release --self-contained false
 vpk pack -u SimpleBin -v 1.1.6 -p artifacts/publish -o artifacts/installer -e SimpleBin.exe -i SimpleBin/App.ico --shortcuts Desktop,StartMenuRoot --delta None
 ```
@@ -28,3 +32,14 @@ vpk pack -u SimpleBin -v 1.1.6 -p artifacts/publish -o artifacts/installer -e Si
 ```
 
 安装与更新时创建桌面和开始菜单快捷方式，目标为安装目录的 `SimpleBin.exe`，图标明确使用同目录的 `App.ico`。
+
+从 Codex 内安装时，通过桌面 Shell 启动，防止继承 Codex 的 MSIX 虚拟化上下文：
+
+```powershell
+$projectRoot = (Get-Location).Path
+$desktopShell = New-Object -ComObject Shell.Application
+$desktopShell.ShellExecute(
+    (Join-Path $projectRoot 'artifacts/installer/SimpleBin-win-Setup.exe'),
+    ('--silent --installto "' + (Join-Path $projectRoot 'artifacts/installed') + '"'),
+    $projectRoot, 'open', 0)
+```
