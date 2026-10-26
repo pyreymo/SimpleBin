@@ -35,13 +35,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _tray.Visible = true;
     }
 
-    private static Bitmap CreateMenuIcon(string glyph)
+    private Bitmap CreateMenuIcon(string glyph)
     {
         var image = new Bitmap(16, 16);
         using var graphics = Graphics.FromImage(image);
         using var font = new Font("Segoe MDL2 Assets", 12, GraphicsUnit.Pixel);
         TextRenderer.DrawText(graphics, glyph, font, new Rectangle(0, 0, 16, 16),
-            SystemColors.MenuText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            _menu.ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         return image;
     }
 
@@ -51,7 +51,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return key?.GetValue("SystemUsesLightTheme") is not int value || value == 0;
     }
 
-    private void OnBinChanged(object sender, FileSystemEventArgs e) => RefreshOnUiThread();
+    private void OnBinChanged(object? sender, EventArgs e) => RefreshOnUiThread();
     private void OnPreferenceChanged(object sender, UserPreferenceChangedEventArgs e) => RefreshOnUiThread();
 
     private void RefreshOnUiThread()
@@ -74,6 +74,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _bin.Update -= OnBinChanged;
             _bin.Dispose();
             _tray.Dispose();
+            _icons.Dispose();
             foreach (ToolStripItem item in _menu.Items)
                 item.Image?.Dispose();
             _menu.Dispose();
@@ -82,5 +83,3 @@ internal sealed class TrayApplicationContext : ApplicationContext
         base.Dispose(disposing);
     }
 }
-
-

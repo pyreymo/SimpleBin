@@ -10,6 +10,7 @@ internal static class Program
     {
         VelopackApp.Build()
             .OnAfterInstallFastCallback(_ => StartupHelper.AddToStartup())
+            .OnAfterUpdateFastCallback(_ => StartupHelper.AddToStartup())
             .OnBeforeUninstallFastCallback(_ => StartupHelper.RemoveFromStartup())
             .Run();
 

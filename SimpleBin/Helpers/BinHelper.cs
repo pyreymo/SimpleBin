@@ -13,18 +13,18 @@ namespace SimpleBin
              uint dwFlags);
     }
 
-    public sealed class BinHelper : IDisposable
+    internal sealed class BinHelper : IDisposable
     {
         private readonly List<FileSystemWatcher> _watchers = [];
-        public delegate void BinUpdateHandler(object sender, FileSystemEventArgs e);
-        public event BinUpdateHandler? Update;
+        public event EventHandler? Update;
         private Timer? _debounceTimer;
         private readonly Lock _lock = new();
         private bool _isDisposed;
 
         public BinHelper()
         {
-            string? sid = (WindowsIdentity.GetCurrent().User?.Value)
+            using var identity = WindowsIdentity.GetCurrent();
+            string sid = identity.User?.Value
                 ?? throw new InvalidOperationException("No such user");
             string binPath = Path.Combine("$Recycle.Bin", sid);
 
@@ -41,19 +41,20 @@ namespace SimpleBin
                 var watcher = new FileSystemWatcher(bin)
                 {
                     IncludeSubdirectories = false,
-                    EnableRaisingEvents = true,
-                    InternalBufferSize = 65536,
-                    Filters = { "$I*", "$R*" },
+                    InternalBufferSize = 4096,
+                    Filter = "$I*",
                     NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
                 };
 
                 watcher.Created += OnBinChanged;
                 watcher.Deleted += OnBinChanged;
+                watcher.Error += (_, _) => OnBinChanged(null, null);
                 _watchers.Add(watcher);
+                watcher.EnableRaisingEvents = true;
             }
         }
 
-        internal static bool ClearBin()
+        internal static void ClearBin()
         {
             var parentWindow = IntPtr.Zero;
             const string? pszRootPath = null; //need to clear data from all disks
@@ -66,15 +67,15 @@ namespace SimpleBin
                 MessageBox.Show(Marshal.GetExceptionForHR(resultCode)?.Message ?? "无法清空回收站。",
                     "SimpleBin", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-            return true;
         }
 
-        private void OnBinChanged(object? sender, FileSystemEventArgs e)
+        private void OnBinChanged(object? sender, FileSystemEventArgs? e)
         {
             lock (_lock)
             {
-                _debounceTimer?.Dispose();
-                _debounceTimer = new(DebounceCallback, e, 500, Timeout.Infinite);
+                if (_isDisposed) return;
+                _debounceTimer ??= new(DebounceCallback);
+                _debounceTimer.Change(500, Timeout.Infinite);
             }
         }
 
@@ -82,9 +83,8 @@ namespace SimpleBin
         {
             lock (_lock)
             {
-                Update?.Invoke(this, (FileSystemEventArgs)state!);
-                _debounceTimer!.Dispose();
-                _debounceTimer = null;
+                if (!_isDisposed)
+                    Update?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -110,6 +110,7 @@ namespace SimpleBin
             {
                 lock (_lock)
                 {
+                    _isDisposed = true;
                     _debounceTimer?.Dispose();
                     _debounceTimer = null;
                 }
@@ -120,11 +121,8 @@ namespace SimpleBin
                     watcher.Dispose();
                 }
 
-                _isDisposed = true;
-                GC.SuppressFinalize(this);
+
             }
         }
     }
 }
-
-

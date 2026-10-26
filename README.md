@@ -1,30 +1,15 @@
-<h1  align="center">SimpleBin</h1>
+# SimpleBin
 
-### Description
+轻量的 Windows 回收站托盘程序。
 
-This is a small program that adds a system recycle bin shortcut to the tray.
+- 单击左键打开系统回收站。
+- 单击右键显示带图标的“清空...”和“退出”，每项约 36px 高。
+- 清空前由 Windows 显示确认框；退出直接关闭程序。
+- 托盘图标区分回收站空/非空，并跟随系统深浅色主题。
+- 安装后自动启用开机启动，卸载时移除启动项。
 
-### Functions
+没有设置窗口、数量或大小预览，也不保存用户配置。
 
-- Recycle Bin tray icon with empty and nonempty states
-- Auto-switching theme (light/dark)
-- You can add or remove this program at startup
-- Automatically refreshes the Recycle Bin status when files or folders are recycled, restored, or permanently deleted.
+要求：Windows 10.0.19041.0 或更新版本、.NET 10 Desktop Runtime。
 
-### System requirement
-
-- minimal os: windows 10.0.19041.0
-- NET Runtime 10 (the installer will download it automatically if not already installed on your PC)
-
-### Performance
-
-In my tests, the tool consumes 10–11 MB of RAM; your system’s resource usage may differ.
-
-### How to use
-
-- Left-click (single): Opens the system Recycle Bin.
-- Right-click (single): Opens a menu with the following options:
-  - View size and file count in the Recycle Bin.
-  - Empty Recycle Bin (delete all files permanently).
-  - Open Settings (configure the utility).
-  - Exit (close the program).
+构建：`dotnet build -c Release`。
