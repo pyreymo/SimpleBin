@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Timer = System.Threading.Timer;
 
@@ -6,19 +6,6 @@ namespace SimpleBin
 {
     static partial class NativeBinMethods
     {
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct Shqueryrbinfo
-        {
-            public int cbSize;
-            public long i64Size;
-            public long i64NumItems;
-        }
-
-        [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-        internal static partial int SHQueryRecycleBinW(
-             string? pszRootPath,
-             ref Shqueryrbinfo pShQueryRbInfo);
-
         [Flags]
         internal enum RecycleBinFlags : uint
         {
@@ -75,20 +62,6 @@ namespace SimpleBin
             }
         }
 
-        internal static (long biteSize, long itemCount) GetBinSize()
-        {
-            const string? pszRootPath = null; //need to watch size from all disks
-            var info = new NativeBinMethods.Shqueryrbinfo();
-            info.cbSize = Marshal.SizeOf(info);
-            const int okCode = 0;
-
-            var result = NativeBinMethods.SHQueryRecycleBinW(pszRootPath, ref info);
-
-            if (result != okCode) throw new Exception("SHQueryRecycleBinW failed");
-
-            return (info.i64Size, info.i64NumItems);
-        }
-
         internal static bool ClearBin()
         {
             const int okCode = 0;
@@ -124,7 +97,21 @@ namespace SimpleBin
             }
         }
 
-        public static bool IsBinEmpty() => GetBinSize().itemCount == 0;
+        public bool IsEmpty()
+        {
+            foreach (var watcher in _watchers)
+            {
+                try
+                {
+                    if (Directory.EnumerateFileSystemEntries(watcher.Path, "$I*").Any())
+                        return false;
+                }
+                catch (DirectoryNotFoundException) { }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
+            }
+            return true;
+        }
 
         public void Dispose()
         {
