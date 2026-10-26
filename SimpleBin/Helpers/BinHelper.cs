@@ -6,6 +6,17 @@ namespace SimpleBin
 {
     static partial class NativeBinMethods
     {
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RecycleBinInfo
+        {
+            internal uint Size;
+            internal long Bytes;
+            internal long Items;
+        }
+
+        [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+        internal static partial int SHQueryRecycleBinW(string? rootPath, ref RecycleBinInfo info);
+
         [LibraryImport("shell32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
         internal static partial int SHEmptyRecycleBinW(
              IntPtr hwnd,
@@ -42,12 +53,13 @@ namespace SimpleBin
                 {
                     IncludeSubdirectories = false,
                     InternalBufferSize = 4096,
-                    Filter = "$I*",
+                    Filters = { "$I*", "$R*" },
                     NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
                 };
 
                 watcher.Created += OnBinChanged;
                 watcher.Deleted += OnBinChanged;
+                watcher.Renamed += OnBinChanged;
                 watcher.Error += (_, _) => OnBinChanged(null, null);
                 _watchers.Add(watcher);
                 watcher.EnableRaisingEvents = true;
@@ -89,18 +101,13 @@ namespace SimpleBin
 
         public bool IsEmpty()
         {
-            foreach (var watcher in _watchers)
+            var info = new NativeBinMethods.RecycleBinInfo
             {
-                try
-                {
-                    if (Directory.EnumerateFileSystemEntries(watcher.Path, "$I*").Any())
-                        return false;
-                }
-                catch (DirectoryNotFoundException) { }
-                catch (UnauthorizedAccessException) { }
-                catch (IOException) { }
-            }
-            return true;
+                Size = (uint)Marshal.SizeOf<NativeBinMethods.RecycleBinInfo>()
+            };
+            // Orphaned $I metadata can remain after Windows has emptied the bin.
+            Marshal.ThrowExceptionForHR(NativeBinMethods.SHQueryRecycleBinW(null, ref info));
+            return info.Items == 0;
         }
 
         public void Dispose()

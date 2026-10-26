@@ -26,6 +26,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 {
                     case 1:
                         BinHelper.ClearBin(_menu.Handle);
+                        RefreshIcon();
                         break;
                     case 2:
                         ExitThread();
